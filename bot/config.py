@@ -103,6 +103,10 @@ class Settings(BaseSettings):
     temp_dir: Path = ROOT / "data" / "tmp"
     proxy: str = ""
     cookies_file: Optional[Path] = None
+    instagram_session_file: Optional[Path] = None
+    """instaloader session file for Instagram (it is rate limited hard
+    without one). Create it once with `instaloader --login=<username>`;
+    the same file is then reused by every request."""
     request_timeout: float = 30.0
 
     # ------------------------------------------------------------ database
@@ -120,7 +124,7 @@ class Settings(BaseSettings):
     def _ids(cls, value: Any) -> Any:
         return [int(item) for item in _split(value)]
 
-    @field_validator("cookies_file", mode="before")
+    @field_validator("cookies_file", "instagram_session_file", mode="before")
     @classmethod
     def _blank_path(cls, value: Any) -> Any:
         """`COOKIES_FILE=` in .env means "no cookies", not the working directory.
@@ -136,7 +140,9 @@ class Settings(BaseSettings):
         text = str(value).strip()
         return None if text in {"", "."} else text
 
-    @field_validator("download_dir", "temp_dir", "cookies_file", mode="after")
+    @field_validator(
+        "download_dir", "temp_dir", "cookies_file", "instagram_session_file", mode="after"
+    )
     @classmethod
     def _absolute(cls, value: Optional[Path]) -> Optional[Path]:
         if value is None:

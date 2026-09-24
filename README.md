@@ -47,6 +47,7 @@ One facade, one canonical `PostMetadata`/`DownloadResult` for every platform:
 | **Reddit** | ✅ | ✅ | ✅ | images, gifs, DASH/CMAF video + separate audio, galleries, crossposts |
 | **YouTube** | ✅ | ✅ | ✅ | videos, shorts, playlists, community posts, adaptive muxing, captions |
 | **Twitter/X** | ✅ | ✅ | ✅ | video ladder, single photos, multi-image galleries, t.co links |
+| **Instagram** | ✅ | ✅ | ✅ | photos, reels (muxed mp4 by url), carousels, optional VP9 DASH ladder + muxing |
 
 ## Install
 
@@ -88,6 +89,7 @@ See [`docs/BOT.md`](docs/BOT.md) for the architecture, plan and limitations.
 python tests/test_reddit_offline.py
 python tests/test_youtube_offline.py
 python tests/test_twitter_offline.py
+python tests/test_instagram_offline.py
 python tests/test_orchestrator_offline.py
 python tests/test_bot_offline.py
 
@@ -95,13 +97,14 @@ python tests/test_bot_offline.py
 python tests/test_reddit_live.py
 python tests/test_youtube_live.py
 python tests/test_twitter_live.py
+python tests/test_instagram_live.py
 python tests/test_orchestrator_live.py
 python tests/test_bot_live.py
 ```
 
 Every live suite accepts `<PREFIX>_TEST_DOWNLOAD=0` to run metadata-only
 (`REDDIT_TEST_DOWNLOAD`, `YT_TEST_DOWNLOAD`, `TW_TEST_DOWNLOAD`,
-`ORCH_TEST_DOWNLOAD`), and reports network/rate-limit problems as `skip` instead
+`IG_TEST_DOWNLOAD`, `ORCH_TEST_DOWNLOAD`), and reports network/rate-limit problems as `skip` instead
 of failures.
 
 ```bash
@@ -115,6 +118,7 @@ The facade is usually enough, but each SDK stands alone:
 ```python
 from downloader.youtube import YouTubeClient
 from downloader.twitter import TwitterClient
+from downloader.instagram import InstagramClient, InstagramConfig
 from downloader.reddit import RedditClient
 
 async with YouTubeClient() as yt:
@@ -132,6 +136,7 @@ async with YouTubeClient() as yt:
 * [`docs/REDDIT_SDK.md`](docs/REDDIT_SDK.md) - Reddit reference.
 * [`docs/YOUTUBE_SDK.md`](docs/YOUTUBE_SDK.md) - YouTube reference.
 * [`docs/TWITTER_SDK.md`](docs/TWITTER_SDK.md) - Twitter/X reference.
+* [`docs/INSTAGRAM_SDK.md`](docs/INSTAGRAM_SDK.md) - Instagram reference.
 
 ## Optional credentials
 
@@ -146,6 +151,9 @@ set REDDIT_CLIENT_SECRET=...
 set REDDIT_REFRESH_TOKEN=...
 ```
 
-YouTube and Twitter work without any credentials. See
+Instagram works anonymously for a few requests and then rate limits you
+(HTTP 401, "Please wait a few minutes"), so point `INSTAGRAM_SESSION_FILE` at an
+`instaloader --login=<username>` session file for reliable use. YouTube and
+Twitter need no credentials at all. See
 [`docs/ORCHESTRATOR.md`](docs/ORCHESTRATOR.md#3-limitations-read-this-before-shipping)
 for what that means in practice.

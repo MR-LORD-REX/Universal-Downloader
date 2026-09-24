@@ -58,6 +58,7 @@ class AppContext:
         self.downloader = DownloaderService(
             proxy=settings.proxy,
             cookies_file=settings.cookies_file,
+            instagram_session_file=settings.instagram_session_file,
             cache_dir=settings.temp_dir / "cache",
             timeout=settings.request_timeout,
         )

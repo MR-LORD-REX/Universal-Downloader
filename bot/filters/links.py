@@ -27,6 +27,9 @@ SUPPORTED_HOSTS = (
     "t.co",
     "reddit.com",
     "redd.it",
+    "instagram.com",
+    "instagr.am",
+    "ig.me",
 )
 
 

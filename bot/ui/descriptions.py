@@ -31,7 +31,12 @@ from .style import (
 )
 
 CAPTION_LIMIT = 1024
-_PLATFORM_TITLES = {"youtube": "YouTube", "twitter": "Twitter", "reddit": "Reddit"}
+_PLATFORM_TITLES = {
+    "youtube": "YouTube",
+    "twitter": "Twitter",
+    "reddit": "Reddit",
+    "instagram": "Instagram",
+}
 _KIND_TITLES = {
     MediaKind.IMAGE: "Photo",
     MediaKind.GIF: "GIF",
@@ -166,6 +171,17 @@ def _quality_row(quality: Optional[str]) -> Optional[str]:
     return str(quality) if quality else None
 
 
+def _instagram_type(meta: PostMetadata) -> Optional[str]:
+    """Human label for the kind of Instagram post shown in the caption."""
+    if str(meta.media_group_type) in ("album", "gallery"):
+        return "Carousel"
+    if meta.is_short:
+        return "Reel"
+    if str(meta.extra.get("product_type") or "").lower() == "igtv":
+        return "IGTV"
+    return "Post"
+
+
 def _original_post_link(url: Optional[str]) -> Optional[str]:
     if not url:
         return None
@@ -219,6 +235,13 @@ def build_caption(
             ("Duration", format_duration(meta.duration) if meta.duration else None),
             ("Quality", _quality_row(quality)),
         ]
+    elif str(platform) == "instagram":
+        details += [
+            ("Account", f"@{meta.author}" if meta.author else None),
+            ("Type", _instagram_type(meta)),
+            ("Duration", format_duration(meta.duration) if meta.duration else None),
+            ("Quality", _quality_row(quality)),
+        ]
     else:
         details += [("Author", meta.author), ("Quality", _quality_row(quality))]
     if items > 1:
@@ -245,7 +268,15 @@ def build_caption(
             ("Comments", format_count(meta.comment_count)),
             ("Posted", format_when(meta.created_utc)),
         ]
-    if meta.is_short:
+    elif str(platform) == "instagram":
+        stats += [
+            ("Likes", format_count(meta.like_count)),
+            ("Comments", format_count(meta.comment_count)),
+            ("Views", format_count(meta.view_count)),
+            ("Posted", format_when(meta.created_utc or meta.timestamp)),
+        ]
+    # Instagram already shows the precise kind (Reel/Post/Carousel) above.
+    if meta.is_short and str(platform) != "instagram":
         stats.append(("Type", "Short"))
     if meta.is_live:
         stats.append(("Type", "Live"))

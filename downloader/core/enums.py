@@ -18,6 +18,7 @@ class Platform(StrEnum):
     REDDIT = "reddit"
     YOUTUBE = "youtube"
     TWITTER = "twitter"
+    INSTAGRAM = "instagram"
     UNKNOWN = "unknown"
 
 

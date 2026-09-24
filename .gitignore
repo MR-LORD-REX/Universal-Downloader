@@ -5,6 +5,7 @@ __pypackages__
 TG_SKILLS.md
 links.txt
 test.py
+session
 
 # bot runtime
 .env

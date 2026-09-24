@@ -7,6 +7,9 @@ yt-dlp>=2024.1.1
 # Optional but recommended: provides the ffmpeg binary used to mux the video
 # and audio tracks that reddit, YouTube and Twitter's HLS serve separately.
 imageio-ffmpeg>=0.4
+# Instagram extraction (posts, reels, carousels and stories). Works anonymously
+# for a short while; a session file makes it reliable - see INSTAGRAM_SESSION_FILE.
+instaloader>=4.15
 
 # ------------------------------------------------------------------ telegram
 aiogram>=3.13

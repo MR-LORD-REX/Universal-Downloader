@@ -28,12 +28,16 @@ class DownloaderService:
         *,
         proxy: str = "",
         cookies_file: Optional[Path] = None,
+        instagram_session_file: Optional[Path] = None,
         cache_dir: Optional[Path] = None,
         timeout: float = 30.0,
         progress_callback: Optional[Any] = None,
     ) -> None:
         self._proxy = proxy or ""
         self._cookies_file = Path(cookies_file) if cookies_file else None
+        self._instagram_session_file = (
+            Path(instagram_session_file) if instagram_session_file else None
+        )
         self._cache_dir = Path(cache_dir) if cache_dir else settings.temp_dir / "cache"
         self._timeout = timeout
         self._progress = progress_callback
@@ -49,6 +53,27 @@ class DownloaderService:
             options["cookiefile"] = self._cookies_file
         return options
 
+    def _build_instagram_options(self) -> dict[str, Any]:
+        """Instagram options: proxy/cache plus the instaloader session file.
+
+        A cookie jar is meaningless here (instaloader keeps its own session),
+        so it is deliberately not forwarded.
+        """
+        options = {
+            key: value
+            for key, value in self._build_options(cookies=False).items()
+            if key in ("proxy", "cache_dir", "timeout")
+        }
+        if self._instagram_session_file is not None:
+            if not self._instagram_session_file.exists():
+                logger.warning(
+                    "INSTAGRAM_SESSION_FILE=%s does not exist; Instagram will be "
+                    "accessed anonymously and rate limit after a few requests",
+                    self._instagram_session_file,
+                )
+            options["session_file"] = str(self._instagram_session_file)
+        return options
+
     async def start(self) -> Downloader:
         async with self._lock:
             if self._downloader is None:
@@ -57,6 +82,7 @@ class DownloaderService:
                     progress_callback=self._progress,
                     youtube_options=self._build_options(),
                     twitter_options=self._build_options(),
+                    instagram_options=self._build_instagram_options(),
                     reddit_options={k: v for k, v in self._build_options(cookies=False).items()
                                     if k in ("proxy", "cache_dir", "timeout")},
                 )

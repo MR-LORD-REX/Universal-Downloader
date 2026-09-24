@@ -398,7 +398,7 @@ def test_repository_roundtrip() -> None:
             )
         async with database.session() as session:
             rows = await repo.ensure_platform_settings(session)
-            assert {row.platform for row in rows} == {"reddit", "youtube", "twitter"}
+            assert {row.platform for row in rows} == {"reddit", "youtube", "twitter", "instagram"}
             stored = await repo.get_user(session, 4242)
             assert stored is not None and stored.has_dm_access is True
             assert stored.request_count == 1
@@ -430,7 +430,7 @@ def test_platform_setting_update() -> None:
     async def scenario(database: Database) -> None:
         async with database.session() as session:
             rows = await repo.ensure_platform_settings(session)
-            assert len(rows) == 3
+            assert len(rows) == len(repo.PLATFORMS)
             row = await repo.update_platform_setting(session, "youtube", quality="720p", max_media_size_bytes=25 * MB)
             assert row is not None and row.quality == "720p"
         async with database.session() as session:
@@ -521,6 +521,75 @@ def test_link_extraction_ignores_unknown_hosts() -> None:
 
     disabled = extract_supported(text, enabled=["reddit"])
     assert disabled == []
+
+
+def test_instagram_links_are_recognised_and_filterable() -> None:
+    from bot.filters.links import extract_supported
+
+    text = (
+        "reel https://www.instagram.com/reel/DdhvW0GslGe/ and a carousel "
+        "https://instagram.com/p/DdPEofvmpPd/ plus https://example.com/x"
+    )
+    found = extract_supported(text)
+    assert [platform for platform, _ in found] == ["instagram", "instagram"]
+    assert extract_supported(text, enabled=["instagram"]) == found
+    assert extract_supported(text, enabled=["youtube"]) == []
+
+
+def test_instagram_caption_shows_the_account_and_the_kind() -> None:
+    meta = _metadata([_muxed_video(0, 1 * MB)], platform=Platform.INSTAGRAM)
+    meta.author = "433"
+    meta.extra["product_type"] = "clips"
+    meta.is_short = True
+    meta.media_group_type = MediaGroupType.SINGLE
+    caption = build_caption(meta, quality="best")
+    assert "@433" in caption
+    assert "Reel" in caption
+    # the precise Instagram kind replaces the generic "Short" stat
+    assert "Short" not in caption
+
+
+def test_instagram_carousel_caption_says_carousel() -> None:
+    meta = _metadata(
+        [_image(0, MB), _image(1, MB)],
+        platform=Platform.INSTAGRAM,
+        media_group_type=MediaGroupType.ALBUM,
+    )
+    meta.author = "lilbieber"
+    caption = build_caption(meta, quality="best")
+    assert "Carousel" in caption
+    assert "@lilbieber" in caption
+    assert "Items" in caption
+
+
+def test_instagram_muxed_video_is_delivered_by_url() -> None:
+    meta = _metadata([_muxed_video(0, 1 * MB)], platform=Platform.INSTAGRAM)
+    meta.quality_hints = {"prefer_muxed": True, "container": "mp4", "codec": "avc1"}
+    plan = plan_route(meta, quality="best")
+    assert len(plan.direct) == 1 and not plan.process and not plan.rejected
+    assert plan.direct[0].action == Action.URL
+    assert plan.direct[0].send_as == SendAs.VIDEO
+
+
+def test_instagram_dash_only_video_goes_to_processing() -> None:
+    fmt = MediaFormat(
+        format_id="dash-1080p",
+        url="https://instagram.fnag1-1.fna.fbcdn.net/o1/v/t2/f2/m367/1080.mp4?oe=abc",
+        kind=FormatKind.VIDEO,
+        origin=FormatOrigin.DASH,
+        extension="mp4",
+        width=1080,
+        height=1920,
+        quality_height=1080,
+        size_bytes=2 * MB,
+        has_video=True,
+        has_audio=False,
+    )
+    item = MediaItem(index=0, kind=MediaKind.VIDEO, formats=[fmt], has_audio=True, extension="mp4")
+    meta = _metadata([item], platform=Platform.INSTAGRAM)
+    plan = plan_route(meta, quality="best")
+    assert not plan.direct and len(plan.process) == 1
+    assert plan.process[0].action == Action.MUX
 
 
 def test_url_failure_detection() -> None:

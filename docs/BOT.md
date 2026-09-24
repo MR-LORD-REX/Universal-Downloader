@@ -86,6 +86,11 @@ For every item of a post the router picks a `(send_as, action)` pair:
 | | muxed but > 50 MB | **rejected** (Telegram cannot upload it) |
 | audio | standalone track | `audio`, server fetch + upload |
 
+Instagram is the easiest platform for this pipeline: its default `best` resolves
+to the **progressive H.264 + AAC mp4**, so a photo is a `photo` url and a reel is
+a `video` url - neither needs the processing lane. Carousels become albums of
+`photo` urls. The one prerequisite is `INSTAGRAM_SESSION_FILE`.
+
 Anything above the admin's `max_media_size_bytes` is rejected per item, before
 any bytes move — the reply names the item and both sizes.
 
@@ -147,7 +152,8 @@ resends the link.
 
 Captions follow the project's Telegram formatting rules (Unicode symbols as UI,
 no decorative emoji) and are per platform: YouTube shows channel/views/likes,
-Twitter shows likes/reposts/replies, Reddit shows subreddit/upvotes/comments.
+Twitter shows likes/reposts/replies, Reddit shows subreddit/upvotes/comments,
+Instagram shows account / kind (Post, Reel or Carousel) / likes / comments / views.
 They are HTML-escaped and clipped to Telegram's 1024 character caption limit.
 See `bot/ui/descriptions.py`.
 
@@ -226,7 +232,7 @@ start-up; `python main.py --migrate` does it manually.
    panel with FSM-driven editing.
 9. **Wiring.** `AppContext`, middlewares, FastAPI + aiogram entry point,
    command registration, `/health` and small read-only APIs.
-10. **Tests.** 30 offline tests (routing, queues, RAM gating, DB/Alembic,
+10. **Tests.** 36 offline tests (routing, queues, RAM gating, DB/Alembic,
     captions, keyboards, filters) and 9 live tests that drive the real fetch
     worker against real posts with a stubbed Telegram bot.
 11. **End-to-end verification against real Telegram.** `tests/test_bot_e2e.py`
@@ -268,18 +274,22 @@ start-up; `python main.py --migrate` does it manually.
    first attempt and `my_chat_member` updates refresh it.
 6. **Platform rate limits are self-imposed.** The token buckets are ours, not
    the platforms'. Aggressive values can still get a CDN to throttle you.
-7. **Extraction depends on yt-dlp** for YouTube and Twitter ladders; a platform
-   change can break extraction until yt-dlp is updated. Reddit metadata also
-   relies on public endpoints (and optionally OAuth credentials).
-8. **Analytics are approximate.** Counters come from `usage_events`; a crash
+7. **Extraction depends on yt-dlp** for YouTube and Twitter ladders, and on
+   `instaloader` for Instagram; a platform change can break extraction until the
+   library is updated. Reddit metadata also relies on public endpoints (and
+   optionally OAuth credentials).
+8. **Instagram needs a session to be reliable**, and its cdn urls are *signed
+   and expiring* (roughly 24-48 h), so a url must be handed to Telegram promptly.
+   Instagram stories also need a logged-in session and vanish after 24 hours.
+9. **Analytics are approximate.** Counters come from `usage_events`; a crash
    between delivery and the DB write loses one event. A post handed to the
    processing lane logs a `queued` row at fetch time; `requests` counts only
    terminal rows so one download is one request, but a post that is queued and
    then never finished still shows up (as `queued`) instead of vanishing.
-9. **No content filter.** NSFW/spoiler flags from the SDK are not acted on; add
+10. **No content filter.** NSFW/spoiler flags from the SDK are not acted on; add
    a policy in `bot/services/routing.py` if you need one.
-10. **Single-language UI.** Strings are English; no i18n layer.
-11. **Transient CDN stalls are not retried per item.** The HTTP layer retries a
+11. **Single-language UI.** Strings are English; no i18n layer.
+12. **Transient CDN stalls are not retried per item.** The HTTP layer retries a
     request and a stalled body read is capped by `REQUEST_TIMEOUT`
     (`sock_read`), but a CDN that stops sending mid-file (observed twice on
     `video.twimg.com` under back-to-back load, while the same download
@@ -306,6 +316,7 @@ See `.env.example` for the full list with comments. The knobs that matter most:
 | `TELEGRAM_UPLOAD_LIMIT` | `50 MB` | raise only with a local Bot API server |
 | `PROXY` | empty | passed to the downloader SDKs |
 | `COOKIES_FILE` | empty | Netscape cookie file for yt-dlp; **empty means no cookies** |
+| `INSTAGRAM_SESSION_FILE` | empty | instaloader session file; **strongly recommended** - Instagram rate limits anonymous clients after a handful of requests (`instaloader --login=<user>` creates it) |
 
 `COOKIES_FILE` must be left empty *or* point at a real file. A blank value is
 normalised to `None`; it is never turned into a path.

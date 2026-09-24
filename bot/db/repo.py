@@ -26,7 +26,7 @@ from .models import (
     utcnow,
 )
 
-PLATFORMS: tuple[str, ...] = ("reddit", "youtube", "twitter")
+PLATFORMS: tuple[str, ...] = ("reddit", "youtube", "twitter", "instagram")
 
 
 # ------------------------------------------------------------------- users
@@ -202,6 +202,10 @@ DEFAULT_PLATFORM_SETTINGS: dict[str, dict[str, Any]] = {
     "youtube": {"quality": "1080p", "fetch_rate_per_second": 0.5},
     "twitter": {"quality": "1080p", "fetch_rate_per_second": 1.0},
     "reddit": {"quality": "1080p", "fetch_rate_per_second": 1.0},
+    # Instagram defaults to "best" on purpose: the selection is a
+    # progressive H.264+AAC mp4, which Telegram can fetch straight from
+    # the CDN url without the bot downloading or muxing anything.
+    "instagram": {"quality": "best", "fetch_rate_per_second": 0.5},
 }
 
 

@@ -29,16 +29,18 @@ from .core.http import HttpClient
 from .core.models import DownloadResult, PostMetadata, human_size
 from .youtube import YouTubeClient, is_youtube_url
 from .twitter import TwitterClient, is_twitter_url
+from .instagram import InstagramClient, is_instagram_url
 
 DEFAULT_PLATFORM_ORDER: tuple[Platform, ...] = (
     Platform.YOUTUBE,
     Platform.TWITTER,
+    Platform.INSTAGRAM,
     Platform.REDDIT,
 )
 
 
 class Downloader:
-    """The orchestrating SDK: one API for Reddit, YouTube and Twitter/X.
+    """The orchestrating SDK: one API for Reddit, YouTube, Twitter/X and Instagram.
 
     Platform clients are created lazily on first use, share the progress
     callback, and are closed together by :meth:`close` (or ``async with``).
@@ -50,19 +52,23 @@ class Downloader:
         progress_callback: Optional[Any] = None,
         youtube: Optional[YouTubeClient] = None,
         twitter: Optional[TwitterClient] = None,
+        instagram: Optional[InstagramClient] = None,
         reddit: Optional[Any] = None,
         reddit_options: Optional[dict[str, Any]] = None,
         youtube_options: Optional[dict[str, Any]] = None,
         twitter_options: Optional[dict[str, Any]] = None,
+        instagram_options: Optional[dict[str, Any]] = None,
         platforms: Optional[Sequence[Platform | str]] = None,
     ) -> None:
         self._progress = progress_callback
         self._youtube = youtube
         self._twitter = twitter
+        self._instagram = instagram
         self._reddit = RedditDriver(reddit) if reddit is not None else None
         self._options = {
             Platform.YOUTUBE: dict(youtube_options or {}),
             Platform.TWITTER: dict(twitter_options or {}),
+            Platform.INSTAGRAM: dict(instagram_options or {}),
             Platform.REDDIT: dict(reddit_options or {}),
         }
         self._enabled = (
@@ -109,6 +115,16 @@ class Downloader:
         return self._twitter
 
     @property
+    def instagram(self) -> InstagramClient:
+        """The Instagram client (created on first access)."""
+        if self._instagram is None:
+            self._instagram = InstagramClient(
+                progress_callback=self._progress, **self._options[Platform.INSTAGRAM]
+            )
+            self._owned.append(self._instagram)
+        return self._instagram
+
+    @property
     def http(self) -> HttpClient:
         """A shared core :class:`HttpClient` for direct/static links.
 
@@ -136,6 +152,7 @@ class Downloader:
         return {
             Platform.YOUTUBE: self.youtube,
             Platform.TWITTER: self.twitter,
+            Platform.INSTAGRAM: self.instagram,
             Platform.REDDIT: self.reddit,
         }[platform]
 
@@ -147,6 +164,8 @@ class Downloader:
             return Platform.YOUTUBE
         if is_twitter_url(url):
             return Platform.TWITTER
+        if is_instagram_url(url):
+            return Platform.INSTAGRAM
         if RedditDriver.supports(url):
             return Platform.REDDIT
         return Platform.UNKNOWN
