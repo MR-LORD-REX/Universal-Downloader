@@ -7,6 +7,8 @@ Telegram's 1024 character caption limit.
 
 from __future__ import annotations
 
+import html
+import re
 from typing import Optional, Sequence
 
 from downloader.core.enums import MediaGroupType, MediaKind, Platform
@@ -16,6 +18,7 @@ from bot.utils.text import clip, escape, format_count, format_duration, format_s
 
 from .style import (
     BAD,
+    HEADER,
     IMPORTANT,
     OK,
     PENDING,
@@ -78,8 +81,68 @@ class CaptionBuilder:
         rows = [(key, value) for key, value in rows if value not in (None, "", "\u2014")]
         if not rows:
             return self
+
+        def _format(value: object) -> str:
+            if isinstance(value, str) and value.startswith("<a href="):
+                return value
+            return escape(value)
+
         lines = [section(name), ""]
-        lines.extend(row(escape(key), escape(value)) for key, value in rows)
+        lines.extend(row(escape(key), _format(value)) for key, value in rows)
+        self._blocks.append("\n".join(lines))
+        return self
+
+    def columns(
+        self,
+        left_name: str,
+        left_rows: Sequence[tuple[str, object]],
+        right_name: str,
+        right_rows: Sequence[tuple[str, object]],
+    ) -> "CaptionBuilder":
+        def _visible(rows: Sequence[tuple[str, object]]) -> list[tuple[str, object]]:
+            return [(key, value) for key, value in rows if value not in (None, "", "\u2014")]
+
+        def _format(value: object) -> str:
+            if isinstance(value, str) and value.startswith("<a href="):
+                return value
+            return escape(value)
+
+        def _display_width(value: str) -> int:
+            plain = re.sub(r"<[^>]+>", "", value)
+            return len(html.unescape(plain))
+
+        def _tree_row(key: str, value: object, last: bool) -> str:
+            branch = "└─" if last else "├─"
+            return f"{branch} {escape(key)} {KV_MARK} {_format(value)}"
+
+        left = _visible(left_rows)
+        right = _visible(right_rows)
+        if not left and not right:
+            return self
+
+        left_width = max(
+            (_display_width(_tree_row(key, value, index == len(left) - 1)) for index, (key, value) in enumerate(left)),
+            default=0,
+        )
+        left_heading = section(left_name)
+        left_heading += " " * max(0, left_width - _display_width(left_heading))
+        lines = [f"{left_heading}    {section(right_name)}", ""]
+        for index in range(max(len(left), len(right))):
+            left_text = (
+                _tree_row(left[index][0], left[index][1], index == len(left) - 1)
+                if index < len(left)
+                else ""
+            )
+            right_text = (
+                _tree_row(right[index][0], right[index][1], index == len(right) - 1)
+                if index < len(right)
+                else ""
+            )
+            if right_text:
+                left_text += " " * max(0, left_width - _display_width(left_text))
+                lines.append(f"{left_text}    {right_text}".rstrip())
+            else:
+                lines.append(left_text)
         self._blocks.append("\n".join(lines))
         return self
 
@@ -103,6 +166,13 @@ def _quality_row(quality: Optional[str]) -> Optional[str]:
     return str(quality) if quality else None
 
 
+def _original_post_link(url: Optional[str]) -> Optional[str]:
+    if not url:
+        return None
+    safe = html.escape(url, quote=True)
+    return f'<a href="{safe}">Original post</a>'
+
+
 def build_caption(
     meta: PostMetadata,
     *,
@@ -120,13 +190,16 @@ def build_caption(
     if group in (MediaGroupType.ALBUM, MediaGroupType.GALLERY) or items > 1:
         headline = f"Album {KV_MARK} {items} items"
 
-    builder = CaptionBuilder().head(f"{platform_title(platform)} {KV_MARK} {headline}")
-    builder.title(meta.title or meta.description)
-    if meta.title and meta.description:
-        builder.para(meta.description, limit=180)
+    title = clip(meta.title, 160) or headline
+    builder = CaptionBuilder()
+    builder._blocks.append(f"{HEADER} {escape(title)}")
+    builder._blocks.append(rule())
 
     size = size_bytes if size_bytes is not None else meta.size_bytes
     details: list[tuple[str, object]] = []
+    original_post = _original_post_link(meta.requested_url or meta.url or meta.permalink or meta.external_url)
+    if original_post:
+        details.append(("Post", original_post))
     if str(platform) == "youtube":
         details += [
             ("Channel", meta.channel or meta.author),
@@ -152,8 +225,6 @@ def build_caption(
         details.append(("Items", items))
     details.append(("Size", format_size(size)))
     details.extend(extra_rows)
-    builder.group("Details", details)
-
     stats: list[tuple[str, object]] = []
     if str(platform) == "youtube":
         stats += [
@@ -178,10 +249,10 @@ def build_caption(
         stats.append(("Type", "Short"))
     if meta.is_live:
         stats.append(("Type", "Live"))
-    builder.group("Stats", stats)
+    builder.columns("Details", details, "Stats", stats)
 
     if note:
-        builder.para(note, limit=200)
+        builder.para(note, limit=120)
     builder.footer(footer)
     return builder.build()
 

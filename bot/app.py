@@ -22,7 +22,7 @@ from typing import Any, Optional, Sequence
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramForbiddenError
-from aiogram.types import Message
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from downloader.core.models import DownloadedFile, PostMetadata
 
@@ -139,6 +139,14 @@ class AppContext:
             meta, quality=quality, size_bytes=size_bytes, footer=self.footer, note=note
         )
 
+    def original_post_markup(self, meta: PostMetadata) -> Optional[InlineKeyboardMarkup]:
+        url = meta.requested_url or meta.url or meta.permalink or meta.external_url
+        if not url:
+            return None
+        return InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="Original post", url=url)]]
+        )
+
     async def reply(
         self,
         chat_id: int,
@@ -229,6 +237,7 @@ class AppContext:
         caption = self.caption_for(
             meta, quality=quality, size_bytes=size_total or None, note=downgrade
         )
+        original_markup = self.original_post_markup(meta)
         delivery = Delivery()
         if route.direct:
             try:
@@ -239,6 +248,7 @@ class AppContext:
                         caption=caption,
                         reply_to=job.message_id,
                         thread_id=job.thread_id,
+                        reply_markup=original_markup,
                     )
                 )
             except TelegramForbiddenError:
@@ -388,6 +398,7 @@ class AppContext:
         mux_items = [item for item in job.route.process if item.action == Action.MUX]
         server_items = [item for item in job.route.process if item.action != Action.MUX]
         caption = self.caption_for(job.meta, quality=job.quality, size_bytes=job.route.process_bytes)
+        original_markup = self.original_post_markup(job.meta)
         delivery = Delivery()
         files: list[DownloadedFile] = []
         notes: list[str] = []
@@ -415,6 +426,7 @@ class AppContext:
                         caption=caption,
                         reply_to=job.message_id,
                         thread_id=job.thread_id,
+                        reply_markup=original_markup,
                     )
                 )
                 caption = None
@@ -426,6 +438,7 @@ class AppContext:
                         caption=caption,
                         reply_to=job.message_id,
                         thread_id=job.thread_id,
+                        reply_markup=original_markup,
                     )
                 )
         except TelegramForbiddenError:

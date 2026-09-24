@@ -156,6 +156,28 @@ def test_admin_handler_imports_database_session() -> None:
     assert hasattr(admin.db, "session")
 
 
+def test_caption_keeps_details_stats_and_original_link() -> None:
+    meta = PostMetadata(
+        platform=Platform.REDDIT,
+        id="1",
+        requested_url="https://www.reddit.com/r/test/comments/abc/hello",
+        title="There is a very long title that should not be included in the final caption text.",
+        description="This is a very long description that should not show up because we removed it.",
+        author="tester",
+        channel="r/test",
+        view_count=1234,
+        like_count=56,
+        comment_count=7,
+        created_utc=1700000000,
+    )
+    text = build_caption(meta, quality="best", size_bytes=321)
+    assert "Original post" in text
+    assert "https://www.reddit.com/r/test/comments/abc/hello" in text
+    assert "very long title" not in text.lower()
+    assert "very long description" not in text.lower()
+    assert "Details" in text and "Stats" in text
+
+
 # ------------------------------------------------------------------- routing
 def test_photos_are_sent_by_url() -> None:
     meta = _metadata([_image(0, MB)], platform=Platform.REDDIT)

@@ -30,6 +30,8 @@ from aiogram.exceptions import (
 from aiogram.types import (
     BufferedInputFile,
     FSInputFile,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
     InputMediaAnimation,
     InputMediaAudio,
     InputMediaDocument,
@@ -140,6 +142,7 @@ class MediaSender:
         caption: Optional[str] = None,
         reply_to: Optional[int] = None,
         thread_id: Optional[int] = None,
+        reply_markup: Optional[InlineKeyboardMarkup] = None,
     ) -> Delivery:
         """Deliver every planned item, grouping album-capable ones together."""
         delivery = Delivery()
@@ -156,7 +159,12 @@ class MediaSender:
             for chunk in _chunks(url_album, self.album_chunk_size):
                 delivery.merge(
                     await self._send_album(
-                        chat_id, chunk, caption=caption, reply_to=reply_to, thread_id=thread_id
+                        chat_id,
+                        chunk,
+                        caption=caption,
+                        reply_to=reply_to,
+                        thread_id=thread_id,
+                        parse_mode="HTML",
                     )
                 )
                 caption = None
@@ -166,7 +174,12 @@ class MediaSender:
         for plan in singles:
             delivery.merge(
                 await self._send_single(
-                    chat_id, plan, caption=caption, reply_to=reply_to, thread_id=thread_id
+                    chat_id,
+                    plan,
+                    caption=caption,
+                    reply_to=reply_to,
+                    thread_id=thread_id,
+                    reply_markup=reply_markup if plan is singles[0] else None,
                 )
             )
             caption = None
@@ -181,13 +194,22 @@ class MediaSender:
         caption: Optional[str],
         reply_to: Optional[int],
         thread_id: Optional[int],
+        reply_markup: Optional[InlineKeyboardMarkup] = None,
     ) -> Delivery:
         delivery = Delivery()
         kwargs = self._reply(reply_to, thread_id)
 
         if plan.action == Action.URL and plan.url:
             try:
-                await self._guard(self._send_by_url, chat_id, plan, caption=caption, **kwargs)
+                await self._guard(
+                    self._send_by_url,
+                    chat_id,
+                    plan,
+                    caption=caption,
+                    reply_markup=reply_markup,
+                    parse_mode="HTML",
+                    **kwargs,
+                )
                 delivery.sent += 1
                 delivery.bytes_sent += plan.size or 0
                 return delivery
@@ -203,7 +225,14 @@ class MediaSender:
                 logger.info("url delivery failed for %s: %s", plan.url, exc)
 
         try:
-            await self._send_by_server(chat_id, plan, caption=caption, **kwargs)
+            await self._send_by_server(
+                chat_id,
+                plan,
+                caption=caption,
+                reply_markup=reply_markup,
+                parse_mode="HTML",
+                **kwargs,
+            )
             delivery.sent += 1
             delivery.bytes_sent += plan.size or 0
             return delivery
@@ -217,45 +246,97 @@ class MediaSender:
             return delivery
 
     async def _send_by_url(
-        self, chat_id: int, plan: PlannedItem, *, caption: Optional[str], **kwargs
+        self,
+        chat_id: int,
+        plan: PlannedItem,
+        *,
+        caption: Optional[str],
+        reply_markup: Optional[InlineKeyboardMarkup] = None,
+        **kwargs,
     ) -> Message:
         url = plan.url or ""
         if plan.send_as == SendAs.PHOTO:
-            return await self._bot.send_photo(chat_id, photo=url, caption=caption, **kwargs)
+            return await self._bot.send_photo(
+                chat_id, photo=url, caption=caption, reply_markup=reply_markup, **kwargs
+            )
         if plan.send_as == SendAs.VIDEO:
             return await self._bot.send_video(
-                chat_id, video=url, caption=caption, supports_streaming=True, **kwargs
+                chat_id,
+                video=url,
+                caption=caption,
+                supports_streaming=True,
+                reply_markup=reply_markup,
+                **kwargs,
             )
         if plan.send_as == SendAs.ANIMATION:
-            return await self._bot.send_animation(chat_id, animation=url, caption=caption, **kwargs)
+            return await self._bot.send_animation(
+                chat_id, animation=url, caption=caption, reply_markup=reply_markup, **kwargs
+            )
         if plan.send_as == SendAs.AUDIO:
-            return await self._bot.send_audio(chat_id, audio=url, caption=caption, **kwargs)
-        return await self._bot.send_document(chat_id, document=url, caption=caption, **kwargs)
+            return await self._bot.send_audio(
+                chat_id, audio=url, caption=caption, reply_markup=reply_markup, **kwargs
+            )
+        return await self._bot.send_document(
+            chat_id, document=url, caption=caption, reply_markup=reply_markup, **kwargs
+        )
 
     async def _send_by_server(
-        self, chat_id: int, plan: PlannedItem, *, caption: Optional[str], **kwargs
+        self,
+        chat_id: int,
+        plan: PlannedItem,
+        *,
+        caption: Optional[str],
+        reply_markup: Optional[InlineKeyboardMarkup] = None,
+        **kwargs,
     ) -> Message:
         if not plan.url:
             raise ValueError(f"item #{plan.index + 1} has no url to fetch")
         data = await self._downloader.fetch(plan.url, max_bytes=self.upload_limit)
         filename = filename_of(plan.url, fallback=f"{plan.send_as}_{plan.index + 1}")
         file = BufferedInputFile(data, filename=filename)
-        return await self._send_file(chat_id, plan.send_as, file, caption=caption, **kwargs)
+        return await self._send_file(
+            chat_id,
+            plan.send_as,
+            file,
+            caption=caption,
+            reply_markup=reply_markup,
+            **kwargs,
+        )
 
     async def _send_file(
-        self, chat_id: int, send_as: str, file: object, *, caption: Optional[str], **kwargs
+        self,
+        chat_id: int,
+        send_as: str,
+        file: object,
+        *,
+        caption: Optional[str],
+        reply_markup: Optional[InlineKeyboardMarkup] = None,
+        **kwargs,
     ) -> Message:
         if send_as == SendAs.PHOTO:
-            return await self._bot.send_photo(chat_id, photo=file, caption=caption, **kwargs)
+            return await self._bot.send_photo(
+                chat_id, photo=file, caption=caption, reply_markup=reply_markup, **kwargs
+            )
         if send_as == SendAs.VIDEO:
             return await self._bot.send_video(
-                chat_id, video=file, caption=caption, supports_streaming=True, **kwargs
+                chat_id,
+                video=file,
+                caption=caption,
+                supports_streaming=True,
+                reply_markup=reply_markup,
+                **kwargs,
             )
         if send_as == SendAs.ANIMATION:
-            return await self._bot.send_animation(chat_id, animation=file, caption=caption, **kwargs)
+            return await self._bot.send_animation(
+                chat_id, animation=file, caption=caption, reply_markup=reply_markup, **kwargs
+            )
         if send_as == SendAs.AUDIO:
-            return await self._bot.send_audio(chat_id, audio=file, caption=caption, **kwargs)
-        return await self._bot.send_document(chat_id, document=file, caption=caption, **kwargs)
+            return await self._bot.send_audio(
+                chat_id, audio=file, caption=caption, reply_markup=reply_markup, **kwargs
+            )
+        return await self._bot.send_document(
+            chat_id, document=file, caption=caption, reply_markup=reply_markup, **kwargs
+        )
 
     # ----------------------------------------------------------------- album
     async def _send_album(
@@ -266,6 +347,7 @@ class MediaSender:
         caption: Optional[str],
         reply_to: Optional[int],
         thread_id: Optional[int],
+        parse_mode: Optional[str] = None,
     ) -> Delivery:
         delivery = Delivery()
         if len(plans) < 2:
@@ -280,7 +362,14 @@ class MediaSender:
 
         kwargs = self._reply(reply_to, thread_id)
         try:
-            await self._guard(self._send_album_by_url, chat_id, plans, caption=caption, **kwargs)
+            await self._guard(
+                self._send_album_by_url,
+                chat_id,
+                plans,
+                caption=caption,
+                parse_mode=parse_mode,
+                **kwargs,
+            )
             delivery.sent += len(plans)
             delivery.bytes_sent += sum(plan.size or 0 for plan in plans)
             return delivery
@@ -298,20 +387,31 @@ class MediaSender:
         for plan in plans:
             delivery.merge(
                 await self._send_single(
-                    chat_id, plan, caption=caption, reply_to=reply_to, thread_id=thread_id
+                    chat_id,
+                    plan,
+                    caption=caption,
+                    reply_to=reply_to,
+                    thread_id=thread_id,
+                    reply_markup=None,
                 )
             )
             caption = None
         return delivery
 
     async def _send_album_by_url(
-        self, chat_id: int, plans: Sequence[PlannedItem], *, caption: Optional[str], **kwargs
+        self,
+        chat_id: int,
+        plans: Sequence[PlannedItem],
+        *,
+        caption: Optional[str],
+        parse_mode: Optional[str] = None,
+        **kwargs,
     ) -> list[Message]:
         media = []
         for position, plan in enumerate(plans):
             cls = _MEDIA_CLASSES.get(plan.send_as, InputMediaPhoto)
             media.append(cls(media=plan.url or "", caption=caption if position == 0 else None))
-        return await self._bot.send_media_group(chat_id, media=media, **kwargs)
+        return await self._bot.send_media_group(chat_id, media=media, parse_mode=parse_mode, **kwargs)
 
     # ------------------------------------------------------- processed files
     async def send_files(
@@ -322,6 +422,7 @@ class MediaSender:
         caption: Optional[str] = None,
         reply_to: Optional[int] = None,
         thread_id: Optional[int] = None,
+        reply_markup: Optional[InlineKeyboardMarkup] = None,
     ) -> Delivery:
         """Upload files the processing queue produced (muxed video, audio...)."""
         delivery = Delivery()
@@ -329,7 +430,15 @@ class MediaSender:
             text = caption if position == 0 else None
             kwargs = self._reply(reply_to, thread_id)
             try:
-                await self._guard(self._send_downloaded, chat_id, file, text, **kwargs)
+                await self._guard(
+                    self._send_downloaded,
+                    chat_id,
+                    file,
+                    text,
+                    reply_markup=reply_markup if position == 0 else None,
+                    parse_mode="HTML",
+                    **kwargs,
+                )
                 delivery.sent += 1
                 delivery.bytes_sent += file.size
             except TelegramForbiddenError:
@@ -341,7 +450,13 @@ class MediaSender:
         return delivery
 
     async def _send_downloaded(
-        self, chat_id: int, file: DownloadedFile, caption: Optional[str], **kwargs
+        self,
+        chat_id: int,
+        file: DownloadedFile,
+        caption: Optional[str],
+        *,
+        reply_markup: Optional[InlineKeyboardMarkup] = None,
+        **kwargs,
     ) -> Message:
         source = _file_input(file)
         kind = str(file.kind)
@@ -352,17 +467,42 @@ class MediaSender:
                 video=source,
                 caption=caption,
                 supports_streaming=True,
+                reply_markup=reply_markup,
                 width=meta.width if meta else None,
                 height=meta.height if meta else None,
                 **kwargs,
             )
         if kind == "audio":
-            return await self._bot.send_audio(chat_id, audio=source, caption=caption, **kwargs)
+            return await self._bot.send_audio(
+                chat_id,
+                audio=source,
+                caption=caption,
+                reply_markup=reply_markup,
+                **kwargs,
+            )
         if kind == "image":
-            return await self._bot.send_photo(chat_id, photo=source, caption=caption, **kwargs)
+            return await self._bot.send_photo(
+                chat_id,
+                photo=source,
+                caption=caption,
+                reply_markup=reply_markup,
+                **kwargs,
+            )
         if kind == "gif":
-            return await self._bot.send_animation(chat_id, animation=source, caption=caption, **kwargs)
-        return await self._bot.send_document(chat_id, document=source, caption=caption, **kwargs)
+            return await self._bot.send_animation(
+                chat_id,
+                animation=source,
+                caption=caption,
+                reply_markup=reply_markup,
+                **kwargs,
+            )
+        return await self._bot.send_document(
+            chat_id,
+            document=source,
+            caption=caption,
+            reply_markup=reply_markup,
+            **kwargs,
+        )
 
 
 def _file_input(file: DownloadedFile):
