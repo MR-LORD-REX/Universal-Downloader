@@ -1,0 +1,24 @@
+# ---------------------------------------------------------------- downloader
+aiohttp>=3.9
+pydantic>=2.5
+# Required: extraction for YouTube and Twitter video ladders.
+# Keep this reasonably current - platforms change their players/APIs often.
+yt-dlp>=2024.1.1
+# Optional but recommended: provides the ffmpeg binary used to mux the video
+# and audio tracks that reddit, YouTube and Twitter's HLS serve separately.
+imageio-ffmpeg>=0.4
+
+# ------------------------------------------------------------------ telegram
+aiogram>=3.13
+
+# -------------------------------------------------------------------- web/api
+fastapi>=0.110
+uvicorn[standard]>=0.27
+
+# ------------------------------------------------------------------- storage
+SQLAlchemy>=2.0
+alembic>=1.13
+aiosqlite>=0.19
+greenlet>=3.0
+pydantic-settings>=2.3
+python-dotenv>=1.0

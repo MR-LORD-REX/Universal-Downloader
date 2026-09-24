@@ -1,0 +1,17 @@
+.venv
+.vscode
+__pycache__
+__pypackages__
+TG_SKILLS.md
+
+# bot runtime
+.env
+data/
+*.db
+*.db-journal
+*.sqlite3
+
+# downloader scratch
+downloads/
+output/
+cache/
