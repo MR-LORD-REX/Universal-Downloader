@@ -142,6 +142,13 @@ def test_settings_parse_json_admins() -> None:
     assert parsed.admin_ids == [5, 6]
 
 
+def test_admin_handler_imports_database_session() -> None:
+    from bot.handlers import admin
+
+    assert hasattr(admin, "db")
+    assert hasattr(admin.db, "session")
+
+
 # ------------------------------------------------------------------- routing
 def test_photos_are_sent_by_url() -> None:
     meta = _metadata([_image(0, MB)], platform=Platform.REDDIT)

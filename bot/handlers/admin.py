@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.app import AppContext
 from bot.db import repo
+from bot.db.base import db
 from bot.db.models import User
 from bot.services.platforms import PlatformSnapshot
 from bot.ui import admin_views as views
