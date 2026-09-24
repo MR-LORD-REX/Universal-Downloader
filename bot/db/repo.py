@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import Any, Iterable, Optional, Sequence
 
 from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import settings
@@ -56,8 +57,15 @@ async def get_or_create_user(
     """Upsert the user and refresh the profile fields Telegram just gave us."""
     user = await get_user(session, tg_id)
     if user is None:
-        user = User(tg_id=tg_id, request_count=0, failed_count=0)
-        session.add(user)
+        try:
+            async with session.begin_nested():
+                user = User(tg_id=tg_id, request_count=0, failed_count=0)
+                session.add(user)
+                await session.flush()
+        except IntegrityError:
+            user = await get_user(session, tg_id)
+            if user is None:
+                raise
     if username is not None:
         user.username = username
     if first_name is not None:
@@ -89,8 +97,16 @@ async def get_or_create_chat(
     result = await session.execute(select(Chat).where(Chat.tg_id == tg_id))
     chat = result.scalar_one_or_none()
     if chat is None:
-        chat = Chat(tg_id=tg_id, type=type, request_count=0)
-        session.add(chat)
+        try:
+            async with session.begin_nested():
+                chat = Chat(tg_id=tg_id, type=type, request_count=0)
+                session.add(chat)
+                await session.flush()
+        except IntegrityError:
+            result = await session.execute(select(Chat).where(Chat.tg_id == tg_id))
+            chat = result.scalar_one_or_none()
+            if chat is None:
+                raise
     if title is not None:
         chat.title = title
     if username is not None:

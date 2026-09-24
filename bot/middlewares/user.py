@@ -36,13 +36,11 @@ class UserMiddleware(BaseMiddleware):
         if callback is not None:
             message = callback.message if isinstance(callback.message, Message) else None
 
-        tg_user = None
-        chat = None
-        if message is not None:
-            tg_user = message.from_user
-            chat = message.chat
-        elif callback is not None:
+        if callback is not None:
             tg_user = callback.from_user
+            chat = message.chat if message is not None else None
+        else:
+            tg_user = message.from_user if message is not None else None
             chat = message.chat if message is not None else None
 
         if tg_user is None or getattr(tg_user, "is_bot", False):
