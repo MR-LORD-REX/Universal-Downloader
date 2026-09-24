@@ -410,8 +410,14 @@ class MediaSender:
         media = []
         for position, plan in enumerate(plans):
             cls = _MEDIA_CLASSES.get(plan.send_as, InputMediaPhoto)
-            media.append(cls(media=plan.url or "", caption=caption if position == 0 else None))
-        return await self._bot.send_media_group(chat_id, media=media, parse_mode=parse_mode, **kwargs)
+            media.append(
+                cls(
+                    media=plan.url or "",
+                    caption=caption if position == 0 else None,
+                    parse_mode=parse_mode if position == 0 else None,
+                )
+            )
+        return await self._bot.send_media_group(chat_id, media=media, **kwargs)
 
     # ------------------------------------------------------- processed files
     async def send_files(
