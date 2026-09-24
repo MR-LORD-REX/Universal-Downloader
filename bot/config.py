@@ -156,6 +156,9 @@ class Settings(BaseSettings):
     def is_admin(self, user_id: Optional[int]) -> bool:
         return bool(user_id) and user_id in self.all_admin_ids
 
+    def is_owner(self, user_id: Optional[int]) -> bool:
+        return bool(user_id) and user_id == self.owner_id
+
     @property
     def webhook_target(self) -> str:
         base = self.webhook_url.rstrip("/")

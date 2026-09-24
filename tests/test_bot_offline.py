@@ -142,6 +142,13 @@ def test_settings_parse_json_admins() -> None:
     assert parsed.admin_ids == [5, 6]
 
 
+def test_settings_owner_and_admin_checks() -> None:
+    parsed = Settings(owner_id=7, admin_ids="[5, 6]", bot_token="x")
+    assert parsed.is_owner(7) is True
+    assert parsed.is_owner(5) is False
+    assert parsed.is_admin(5) is True
+
+
 def test_admin_handler_imports_database_session() -> None:
     from bot.handlers import admin
 
