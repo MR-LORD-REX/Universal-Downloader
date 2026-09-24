@@ -83,6 +83,8 @@ class DownloaderService:
                     youtube_options=self._build_options(),
                     twitter_options=self._build_options(),
                     instagram_options=self._build_instagram_options(),
+                    pinterest_options=self._build_options(),
+                    tiktok_options=self._build_options(),
                     reddit_options={k: v for k, v in self._build_options(cookies=False).items()
                                     if k in ("proxy", "cache_dir", "timeout")},
                 )

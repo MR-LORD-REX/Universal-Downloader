@@ -17,6 +17,7 @@ from .exceptions import (
     MetadataError,
     MediaNotAvailableError,
 )
+from .select import MODE_AUDIO, MODE_FORMAT, MODE_PAIR, MODE_WORST, QualitySpec
 
 UNAVAILABLE_MARKERS = (
     "private video",
@@ -177,6 +178,53 @@ class YtDlpExtractor:
 
     async def download(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         return await asyncio.to_thread(self.download_sync, *args, **kwargs)
+
+
+def ytdlp_format_selector(spec: QualitySpec, config: Any) -> str:
+    """Translate a :class:`~downloader.core.select.QualitySpec` into ``-f``.
+
+    Shared by every yt-dlp backed platform (YouTube, Twitter, Pinterest,
+    TikTok): the yt-dlp format grammar is identical, only the codec/container
+    preferences differ and those are read off the config.
+    """
+    container = spec.container or getattr(config, "prefer_container", None) or "mp4"
+    audio_container = "m4a" if container in ("mp4", "m4v", "mov") else "webm"
+    if spec.mode == MODE_AUDIO:
+        return f"bestaudio[ext={audio_container}]/bestaudio/best"
+    if spec.mode == MODE_PAIR and spec.format_id and spec.audio_id:
+        return f"{spec.format_id}+{spec.audio_id}"
+    if spec.mode == MODE_FORMAT and spec.format_id:
+        return spec.format_id
+    if spec.mode == MODE_WORST:
+        return "worstvideo+worstaudio/worst"
+    height = spec.height
+    if height:
+        return (
+            f"bestvideo[height<={height}][ext={container}]+bestaudio[ext={audio_container}]/"
+            f"bestvideo[height<={height}]+bestaudio/best[height<={height}]/best"
+        )
+    return (
+        f"bestvideo[ext={container}]+bestaudio[ext={audio_container}]/"
+        "bestvideo+bestaudio/best"
+    )
+
+
+def ytdlp_format_sort(spec: QualitySpec, config: Any) -> list[str]:
+    """``-S`` sort fields expressing the "proper quality, Telegram safe" policy."""
+    fields: list[str] = []
+    if spec.height:
+        fields.append(f"res:{spec.height}")
+    codec = spec.codec or getattr(config, "prefer_video_codec", None)
+    if codec:
+        fields.append(f"vcodec:{'h264' if codec.startswith(('avc', 'h264')) else codec}")
+    audio_codec = getattr(config, "prefer_audio_codec", None) or "mp4a"
+    fields.append(f"acodec:{'aac' if audio_codec.startswith(('mp4a', 'aac')) else audio_codec}")
+    container = spec.container or getattr(config, "prefer_container", None)
+    if container == "mp4":
+        fields.append("ext:mp4:m4a")
+    fields.append("res")
+    fields.append("br")
+    return fields
 
 
 def translate_error(message: str) -> Exception:

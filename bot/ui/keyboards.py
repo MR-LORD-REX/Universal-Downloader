@@ -242,6 +242,40 @@ def suggestions_kb(rows: list[Suggestion], *, page: int, total: int) -> InlineKe
     return builder.as_markup()
 
 
+CAPTION_TOGGLE_CALLBACK = "set:caption"
+"""Callback data of the caption toggle. ``:post`` marks the under-post variant."""
+
+
+def caption_toggle_button(enabled: bool, *, on_post: bool = False) -> InlineKeyboardButton:
+    """The one caption on/off button, shared by /settings and delivered posts."""
+    data = CAPTION_TOGGLE_CALLBACK + (":post" if on_post else "")
+    return InlineKeyboardButton(
+        text=f"Caption \u00b7 {'on' if enabled else 'off'}", callback_data=data
+    )
+
+
+def settings_markup(caption_enabled: bool) -> InlineKeyboardMarkup:
+    """The /settings keyboard (today: just the caption toggle)."""
+    return InlineKeyboardMarkup(inline_keyboard=[[caption_toggle_button(caption_enabled)]])
+
+
+def post_markup(url: Optional[str], *, caption_enabled: bool = True) -> InlineKeyboardMarkup:
+    """Buttons under a delivered post: original link (when known) plus the toggle."""
+    row = [caption_toggle_button(caption_enabled, on_post=True)]
+    if url:
+        row.insert(0, InlineKeyboardButton(text="Original post", url=url))
+    return InlineKeyboardMarkup(inline_keyboard=[row])
+
+
+def caption_of_markup(markup: Optional[InlineKeyboardMarkup]) -> Optional[str]:
+    """The original-post url inside a delivered post's keyboard, if any."""
+    for row in getattr(markup, "inline_keyboard", None) or []:
+        for button in row:
+            if getattr(button, "url", None):
+                return button.url
+    return None
+
+
 def confirm_kb(action: str, cancel: str = "adm:home") -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
@@ -259,6 +293,9 @@ def cancel_kb(callback: str = "adm:home") -> InlineKeyboardMarkup:
 
 __all__ = [
     "CALLBACK_PREFIX",
+    "CAPTION_TOGGLE_CALLBACK",
+    "caption_of_markup",
+    "caption_toggle_button",
     "PER_PAGE",
     "PLATFORM_FIELDS",
     "admin_home",
@@ -272,6 +309,8 @@ __all__ = [
     "home_button",
     "platform_detail",
     "platforms_kb",
+    "post_markup",
+    "settings_markup",
     "suggestions_kb",
     "user_detail",
     "users_page",

@@ -99,6 +99,7 @@ async def on_link(
             user_db_id=user.id,
             chat_db_id=chat_row.id if chat_row is not None else None,
             status_message_id=status_id,
+            caption_enabled=user.caption_enabled,
         )
         accepted, reason = ctx.queues.submit_fetch(job)
         if not accepted:

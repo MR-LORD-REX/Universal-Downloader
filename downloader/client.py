@@ -30,17 +30,22 @@ from .core.models import DownloadResult, PostMetadata, human_size
 from .youtube import YouTubeClient, is_youtube_url
 from .twitter import TwitterClient, is_twitter_url
 from .instagram import InstagramClient, is_instagram_url
+from .pinterest import PinterestClient, is_pinterest_url
+from .tiktok import TikTokClient, is_tiktok_url
 
 DEFAULT_PLATFORM_ORDER: tuple[Platform, ...] = (
     Platform.YOUTUBE,
     Platform.TWITTER,
     Platform.INSTAGRAM,
+    Platform.PINTEREST,
+    Platform.TIKTOK,
     Platform.REDDIT,
 )
 
 
 class Downloader:
-    """The orchestrating SDK: one API for Reddit, YouTube, Twitter/X and Instagram.
+    """The orchestrating SDK: one API for Reddit, YouTube, Twitter/X, Instagram,
+    Pinterest and TikTok.
 
     Platform clients are created lazily on first use, share the progress
     callback, and are closed together by :meth:`close` (or ``async with``).
@@ -53,22 +58,30 @@ class Downloader:
         youtube: Optional[YouTubeClient] = None,
         twitter: Optional[TwitterClient] = None,
         instagram: Optional[InstagramClient] = None,
+        pinterest: Optional[PinterestClient] = None,
+        tiktok: Optional[TikTokClient] = None,
         reddit: Optional[Any] = None,
         reddit_options: Optional[dict[str, Any]] = None,
         youtube_options: Optional[dict[str, Any]] = None,
         twitter_options: Optional[dict[str, Any]] = None,
         instagram_options: Optional[dict[str, Any]] = None,
+        pinterest_options: Optional[dict[str, Any]] = None,
+        tiktok_options: Optional[dict[str, Any]] = None,
         platforms: Optional[Sequence[Platform | str]] = None,
     ) -> None:
         self._progress = progress_callback
         self._youtube = youtube
         self._twitter = twitter
         self._instagram = instagram
+        self._pinterest = pinterest
+        self._tiktok = tiktok
         self._reddit = RedditDriver(reddit) if reddit is not None else None
         self._options = {
             Platform.YOUTUBE: dict(youtube_options or {}),
             Platform.TWITTER: dict(twitter_options or {}),
             Platform.INSTAGRAM: dict(instagram_options or {}),
+            Platform.PINTEREST: dict(pinterest_options or {}),
+            Platform.TIKTOK: dict(tiktok_options or {}),
             Platform.REDDIT: dict(reddit_options or {}),
         }
         self._enabled = (
@@ -125,6 +138,26 @@ class Downloader:
         return self._instagram
 
     @property
+    def pinterest(self) -> PinterestClient:
+        """The Pinterest client (created on first access)."""
+        if self._pinterest is None:
+            self._pinterest = PinterestClient(
+                progress_callback=self._progress, **self._options[Platform.PINTEREST]
+            )
+            self._owned.append(self._pinterest)
+        return self._pinterest
+
+    @property
+    def tiktok(self) -> TikTokClient:
+        """The TikTok client (created on first access)."""
+        if self._tiktok is None:
+            self._tiktok = TikTokClient(
+                progress_callback=self._progress, **self._options[Platform.TIKTOK]
+            )
+            self._owned.append(self._tiktok)
+        return self._tiktok
+
+    @property
     def http(self) -> HttpClient:
         """A shared core :class:`HttpClient` for direct/static links.
 
@@ -153,6 +186,8 @@ class Downloader:
             Platform.YOUTUBE: self.youtube,
             Platform.TWITTER: self.twitter,
             Platform.INSTAGRAM: self.instagram,
+            Platform.PINTEREST: self.pinterest,
+            Platform.TIKTOK: self.tiktok,
             Platform.REDDIT: self.reddit,
         }[platform]
 
@@ -166,6 +201,10 @@ class Downloader:
             return Platform.TWITTER
         if is_instagram_url(url):
             return Platform.INSTAGRAM
+        if is_pinterest_url(url):
+            return Platform.PINTEREST
+        if is_tiktok_url(url):
+            return Platform.TIKTOK
         if RedditDriver.supports(url):
             return Platform.REDDIT
         return Platform.UNKNOWN

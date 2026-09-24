@@ -398,7 +398,14 @@ def test_repository_roundtrip() -> None:
             )
         async with database.session() as session:
             rows = await repo.ensure_platform_settings(session)
-            assert {row.platform for row in rows} == {"reddit", "youtube", "twitter", "instagram"}
+            assert {row.platform for row in rows} == {
+                "reddit",
+                "youtube",
+                "twitter",
+                "instagram",
+                "pinterest",
+                "tiktok",
+            }
             stored = await repo.get_user(session, 4242)
             assert stored is not None and stored.has_dm_access is True
             assert stored.request_count == 1
@@ -721,6 +728,200 @@ def test_queued_hand_off_is_not_counted_twice() -> None:
             await database.dispose()
 
         asyncio.run(run())
+
+
+# ---------------------------------------------------------- new platforms
+def test_pinterest_and_tiktok_links_are_recognised() -> None:
+    from bot.filters.links import extract_supported
+
+    text = (
+        "pin https://www.pinterest.com/pin/1084663891475263837/ and short https://pin.it/3fJd2lQ "
+        "plus a clip https://www.tiktok.com/@nasa/video/7253412088251534594 "
+        "and https://vm.tiktok.com/ZM1xx/"
+    )
+    found = extract_supported(text)
+    assert [platform for platform, _ in found] == [
+        "pinterest",
+        "pinterest",
+        "tiktok",
+        "tiktok",
+    ], found
+    assert extract_supported(text, enabled=["tiktok"]) == found[2:]
+    assert extract_supported(text, enabled=["reddit"]) == []
+
+
+def test_pinterest_caption_shows_the_author_and_the_kind() -> None:
+    meta = _metadata([_image(0, MB)], platform=Platform.PINTEREST)
+    meta.author = "Dog Lover"
+    caption = build_caption(meta, quality="best")
+    assert "Dog Lover" in caption
+    assert "Pin" in caption
+
+
+def test_tiktok_caption_shows_the_account_and_the_track() -> None:
+    meta = _metadata([_muxed_video(0, MB)], platform=Platform.TIKTOK)
+    meta.author = "nasa"
+    meta.extra["track"] = "original sound - nasa"
+    caption = build_caption(meta, quality="best")
+    assert "@nasa" in caption
+    assert "original sound - nasa" in caption
+    assert "Video" in caption
+
+
+def test_pinterest_and_tiktok_annotate_the_settings_page() -> None:
+    from bot.ui.descriptions import platform_title
+
+    assert platform_title("pinterest") == "Pinterest"
+    assert platform_title("tiktok") == "TikTok"
+    assert "pinterest" in repo.PLATFORMS and "tiktok" in repo.PLATFORMS
+    for name in ("pinterest", "tiktok"):
+        assert repo.DEFAULT_PLATFORM_SETTINGS[name]["quality"] == "best"
+
+
+# ----------------------------------------------------------- caption toggle
+def test_caption_toggle_button_shares_the_original_post_row() -> None:
+    from bot.ui.keyboards import (
+        CAPTION_TOGGLE_CALLBACK,
+        caption_of_markup,
+        post_markup,
+        settings_markup,
+    )
+
+    url = "https://www.pinterest.com/pin/1084663891475263837/"
+    markup = post_markup(url, caption_enabled=True)
+    row = markup.inline_keyboard[0]
+    assert len(row) == 2, "the toggle must sit in the same row as the original post button"
+    assert row[0].url == url
+    assert row[1].callback_data == CAPTION_TOGGLE_CALLBACK + ":post"
+    assert "on" in row[1].text
+    assert caption_of_markup(markup) == url
+    assert "off" in post_markup(url, caption_enabled=False).inline_keyboard[0][1].text
+
+    # the toggle still renders when the post url is unknown
+    bare = post_markup(None)
+    assert [button.callback_data for button in bare.inline_keyboard[0]] == [
+        CAPTION_TOGGLE_CALLBACK + ":post"
+    ]
+    assert settings_markup(True).inline_keyboard[0][0].callback_data == CAPTION_TOGGLE_CALLBACK
+
+
+def test_caption_off_sends_only_the_bot_username() -> None:
+    from bot.app import AppContext
+
+    ctx = AppContext.__new__(AppContext)
+    ctx.bot_username = "dlbot"
+    meta = _metadata([_image(0, MB)], platform=Platform.PINTEREST)
+    meta.requested_url = "https://www.pinterest.com/pin/1084663891475263837/"
+
+    full = ctx.caption_for(meta, quality="best", size_bytes=MB)
+    assert "@dlbot" in full and "Pin" in full
+    assert ctx.caption_for(meta, quality="best", size_bytes=MB, caption_enabled=False) == "@dlbot"
+
+    markup = ctx.original_post_markup(meta, caption_enabled=False)
+    assert len(markup.inline_keyboard[0]) == 2
+    assert markup.inline_keyboard[0][0].url == meta.requested_url
+    assert "off" in markup.inline_keyboard[0][1].text
+
+
+def test_caption_toggle_handler_flips_the_user_and_the_button() -> None:
+    from bot.db.models import User
+    from bot.handlers.start import on_toggle_caption
+    from bot.ui.keyboards import post_markup
+
+    class _Message:
+        def __init__(self) -> None:
+            self.reply_markup = post_markup(
+                "https://x.com/a/status/1", caption_enabled=True
+            )
+            self.edited = None
+
+        async def edit_reply_markup(self, reply_markup=None):  # noqa: ANN001
+            self.edited = reply_markup
+
+    class _Query:
+        data = "set:caption:post"
+
+        def __init__(self) -> None:
+            self.message = _Message()
+            self.answers: list[str] = []
+
+        async def answer(self, text=None, **kwargs):  # noqa: ANN001
+            self.answers.append(text or "")
+
+    user = User(tg_id=1, caption_enabled=True)
+    query = _Query()
+    asyncio.run(on_toggle_caption(query, user))  # type: ignore[arg-type]
+
+    assert user.caption_enabled is False
+    edited = query.message.edited
+    assert edited is not None
+    assert edited.inline_keyboard[0][0].url == "https://x.com/a/status/1"
+    assert "off" in edited.inline_keyboard[0][1].text
+    assert "Captions off" in query.answers[0]
+
+
+def test_caption_toggle_handler_redraws_the_settings_keyboard() -> None:
+    from bot.db.models import User
+    from bot.handlers.start import on_toggle_caption
+
+    query = type("Q", (), {})()
+    query.data = "set:caption"
+    query.message = type("M", (), {"reply_markup": None, "edited": None})()
+
+    async def _edit(reply_markup=None):  # noqa: ANN001
+        query.message.edited = reply_markup
+
+    async def _answer(text=None, **kwargs):  # noqa: ANN001
+        query.answered = text
+
+    query.message.edit_reply_markup = _edit
+    query.answer = _answer
+
+    user = User(tg_id=1, caption_enabled=False)
+    asyncio.run(on_toggle_caption(query, user))  # type: ignore[arg-type]
+    assert user.caption_enabled is True
+    button = query.message.edited.inline_keyboard[0][0]
+    assert button.callback_data == "set:caption" and "on" in button.text
+
+
+def test_caption_preference_defaults_on_and_persists() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        database = Database(f"sqlite+aiosqlite:///{Path(tmp) / 'caption.db'}")
+
+        async def scenario() -> None:
+            await database.create_all()
+            async with database.session() as session:
+                user = await repo.get_or_create_user(session, 99, username="u")
+                assert user.caption_enabled is True
+                user.caption_enabled = False
+            async with database.session() as session:
+                again = await repo.get_user(session, 99)
+                assert again is not None and again.caption_enabled is False
+
+        async def run() -> None:
+            try:
+                await scenario()
+            finally:
+                await database.dispose()
+
+        asyncio.run(run())
+
+
+def test_fetch_jobs_carry_the_caption_preference() -> None:
+    from bot.services.queues import ProcessJob
+
+    default = FetchJob(platform="pinterest", url="https://x/1", chat_id=1, message_id=1, user_tg_id=1)
+    assert default.caption_enabled is True
+    off = FetchJob(
+        platform="pinterest",
+        url="https://x/1",
+        chat_id=1,
+        message_id=1,
+        user_tg_id=1,
+        caption_enabled=False,
+    )
+    assert off.caption_enabled is False
+    assert "caption_enabled" in ProcessJob.__dataclass_fields__
 
 
 # --------------------------------------------------------------------- runner

@@ -36,6 +36,8 @@ _PLATFORM_TITLES = {
     "twitter": "Twitter",
     "reddit": "Reddit",
     "instagram": "Instagram",
+    "pinterest": "Pinterest",
+    "tiktok": "TikTok",
 }
 _KIND_TITLES = {
     MediaKind.IMAGE: "Photo",
@@ -182,6 +184,38 @@ def _instagram_type(meta: PostMetadata) -> Optional[str]:
     return "Post"
 
 
+def _pinterest_type(meta: PostMetadata) -> Optional[str]:
+    """Human label for the kind of Pinterest post shown in the caption."""
+    if str(meta.media_group_type) in ("album", "gallery", "playlist"):
+        return "Board"
+    if _int(meta.extra.get("story_pages")) > 1:
+        return "Idea Pin"
+    return "Pin"
+
+
+def _tiktok_type(meta: PostMetadata) -> Optional[str]:
+    """Human label for the kind of TikTok post shown in the caption."""
+    if str(meta.media_group_type) == "playlist":
+        return {
+            "profile": "Profile",
+            "sound": "Sound",
+            "tag": "Hashtag",
+            "collection": "Collection",
+        }.get(str(meta.extra.get("list_kind") or ""), "Feed")
+    if meta.extra.get("audio_only"):
+        return "Slideshow"
+    if meta.is_live:
+        return "LIVE"
+    return "Video"
+
+
+def _int(value: object) -> int:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0
+
+
 def _original_post_link(url: Optional[str]) -> Optional[str]:
     if not url:
         return None
@@ -242,6 +276,21 @@ def build_caption(
             ("Duration", format_duration(meta.duration) if meta.duration else None),
             ("Quality", _quality_row(quality)),
         ]
+    elif str(platform) == "pinterest":
+        details += [
+            ("Author", meta.author),
+            ("Type", _pinterest_type(meta)),
+            ("Duration", format_duration(meta.duration) if meta.duration else None),
+            ("Quality", _quality_row(quality)),
+        ]
+    elif str(platform) == "tiktok":
+        details += [
+            ("Account", f"@{meta.author}" if meta.author else None),
+            ("Type", _tiktok_type(meta)),
+            ("Duration", format_duration(meta.duration) if meta.duration else None),
+            ("Track", clip(meta.extra.get("track"), 40)),
+            ("Quality", _quality_row(quality)),
+        ]
     else:
         details += [("Author", meta.author), ("Quality", _quality_row(quality))]
     if items > 1:
@@ -273,6 +322,20 @@ def build_caption(
             ("Likes", format_count(meta.like_count)),
             ("Comments", format_count(meta.comment_count)),
             ("Views", format_count(meta.view_count)),
+            ("Posted", format_when(meta.created_utc or meta.timestamp)),
+        ]
+    elif str(platform) == "pinterest":
+        stats += [
+            ("Saves", format_count(_int(meta.extra.get("repin_count")))),
+            ("Comments", format_count(meta.comment_count)),
+            ("Posted", format_when(meta.created_utc or meta.timestamp)),
+        ]
+    elif str(platform) == "tiktok":
+        stats += [
+            ("Likes", format_count(meta.like_count)),
+            ("Comments", format_count(meta.comment_count)),
+            ("Shares", format_count(meta.repost_count)),
+            ("Plays", format_count(meta.view_count)),
             ("Posted", format_when(meta.created_utc or meta.timestamp)),
         ]
     # Instagram already shows the precise kind (Reel/Post/Carousel) above.

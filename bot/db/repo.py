@@ -26,7 +26,14 @@ from .models import (
     utcnow,
 )
 
-PLATFORMS: tuple[str, ...] = ("reddit", "youtube", "twitter", "instagram")
+PLATFORMS: tuple[str, ...] = (
+    "reddit",
+    "youtube",
+    "twitter",
+    "instagram",
+    "pinterest",
+    "tiktok",
+)
 
 
 # ------------------------------------------------------------------- users
@@ -206,6 +213,10 @@ DEFAULT_PLATFORM_SETTINGS: dict[str, dict[str, Any]] = {
     # progressive H.264+AAC mp4, which Telegram can fetch straight from
     # the CDN url without the bot downloading or muxing anything.
     "instagram": {"quality": "best", "fetch_rate_per_second": 0.5},
+    # Pinterest and TikTok both publish progressive H.264+AAC renditions,
+    # so "best" keeps the deliver-by-url fast path for most videos.
+    "pinterest": {"quality": "best", "fetch_rate_per_second": 0.5},
+    "tiktok": {"quality": "best", "fetch_rate_per_second": 0.5},
 }
 
 

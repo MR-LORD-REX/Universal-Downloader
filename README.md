@@ -48,6 +48,8 @@ One facade, one canonical `PostMetadata`/`DownloadResult` for every platform:
 | **YouTube** | ✅ | ✅ | ✅ | videos, shorts, playlists, community posts, adaptive muxing, captions |
 | **Twitter/X** | ✅ | ✅ | ✅ | video ladder, single photos, multi-image galleries, t.co links |
 | **Instagram** | ✅ | ✅ | ✅ | photos, reels (muxed mp4 by url), carousels, optional VP9 DASH ladder + muxing |
+| **Pinterest** | ✅ | ✅ | ✅ | pins, idea pins, image + video pins, boards, full image rendition ladder |
+| **TikTok** | ✅ | ✅ | ✅ | videos, profiles, sounds, hashtags, collections; photo posts yield audio only |
 
 ## Install
 
@@ -90,6 +92,8 @@ python tests/test_reddit_offline.py
 python tests/test_youtube_offline.py
 python tests/test_twitter_offline.py
 python tests/test_instagram_offline.py
+python tests/test_pinterest_offline.py
+python tests/test_tiktok_offline.py
 python tests/test_orchestrator_offline.py
 python tests/test_bot_offline.py
 
@@ -98,14 +102,18 @@ python tests/test_reddit_live.py
 python tests/test_youtube_live.py
 python tests/test_twitter_live.py
 python tests/test_instagram_live.py
+python tests/test_pinterest_live.py
+python tests/test_tiktok_live.py
 python tests/test_orchestrator_live.py
 python tests/test_bot_live.py
 ```
 
 Every live suite accepts `<PREFIX>_TEST_DOWNLOAD=0` to run metadata-only
 (`REDDIT_TEST_DOWNLOAD`, `YT_TEST_DOWNLOAD`, `TW_TEST_DOWNLOAD`,
-`IG_TEST_DOWNLOAD`, `ORCH_TEST_DOWNLOAD`), and reports network/rate-limit problems as `skip` instead
-of failures.
+`IG_TEST_DOWNLOAD`, `PIN_TEST_DOWNLOAD`, `TT_TEST_DOWNLOAD`, `ORCH_TEST_DOWNLOAD`),
+and reports network/rate-limit problems as `skip` instead of failures. TikTok blocks
+datacentre IPs, so `test_tiktok_live.py` skips itself when the host is blocked -
+run it on a residential/VPS IP or with `TT_TEST_PROXY`.
 
 ```bash
 python -m downloader.reddit https://redd.it/1basx0i --describe -d output
@@ -119,6 +127,8 @@ The facade is usually enough, but each SDK stands alone:
 from downloader.youtube import YouTubeClient
 from downloader.twitter import TwitterClient
 from downloader.instagram import InstagramClient, InstagramConfig
+from downloader.pinterest import PinterestClient
+from downloader.tiktok import TikTokClient
 from downloader.reddit import RedditClient
 
 async with YouTubeClient() as yt:
@@ -137,6 +147,8 @@ async with YouTubeClient() as yt:
 * [`docs/YOUTUBE_SDK.md`](docs/YOUTUBE_SDK.md) - YouTube reference.
 * [`docs/TWITTER_SDK.md`](docs/TWITTER_SDK.md) - Twitter/X reference.
 * [`docs/INSTAGRAM_SDK.md`](docs/INSTAGRAM_SDK.md) - Instagram reference.
+* [`docs/PINTEREST_SDK.md`](docs/PINTEREST_SDK.md) - Pinterest reference.
+* [`docs/TIKTOK_SDK.md`](docs/TIKTOK_SDK.md) - TikTok reference.
 
 ## Optional credentials
 
@@ -153,7 +165,10 @@ set REDDIT_REFRESH_TOKEN=...
 
 Instagram works anonymously for a few requests and then rate limits you
 (HTTP 401, "Please wait a few minutes"), so point `INSTAGRAM_SESSION_FILE` at an
-`instaloader --login=<username>` session file for reliable use. YouTube and
-Twitter need no credentials at all. See
+`instaloader --login=<username>` session file for reliable use. YouTube,
+Twitter, Pinterest and TikTok need no credentials for public content. TikTok
+does block datacentre IPs outright (`status 10204` or a connect timeout), so
+run it from a residential/VPS IP or through a proxy (`PROXY=...`), and pass a
+`COOKIES_FILE` for age-gated posts. See
 [`docs/ORCHESTRATOR.md`](docs/ORCHESTRATOR.md#3-limitations-read-this-before-shipping)
 for what that means in practice.

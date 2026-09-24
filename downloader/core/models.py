@@ -167,7 +167,13 @@ def format_preference(
     Rendition height dominates so a quality request is never silently
     downgraded for container reasons. Ties are then broken by provenance (an
     original beats a preview), container, codec, "already muxed", "direct url
-    rather than a manifest" and finally "size is actually known".
+    rather than a manifest", "size is actually known", bitrate, fps, pixel
+    count and finally the raw file size.
+
+    That last key matters for platforms whose metadata does not distinguish a
+    ladder properly: Pinterest reports the same ``640x1138`` for five renditions
+    that are genuinely different, so the *larger file* is the better one and
+    the only honest tie breaker available.
     """
     height = fmt.quality_height or fmt.height or 0
     return (
@@ -181,6 +187,7 @@ def format_preference(
         fmt.bitrate_kbps or 0,
         fmt.fps or 0,
         fmt.pixels,
+        fmt.size_bytes or 0,
     )
 
 

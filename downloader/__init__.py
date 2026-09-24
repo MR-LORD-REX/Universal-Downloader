@@ -1,4 +1,5 @@
-"""Multi-platform media downloader SDK (Reddit, YouTube, Twitter/X, Instagram).
+"""Multi-platform media downloader SDK (Reddit, YouTube, Twitter/X, Instagram,
+Pinterest, TikTok).
 
 The public surface is deliberately small:
 
@@ -7,8 +8,10 @@ The public surface is deliberately small:
   :class:`~downloader.core.models.DownloadResult` for every platform.
 * :class:`~downloader.reddit.RedditClient`, :class:`~downloader.youtube.YouTubeClient`,
   :class:`~downloader.twitter.TwitterClient`,
-  :class:`~downloader.instagram.InstagramClient` - the platform SDKs, each
-  usable on its own.
+  :class:`~downloader.instagram.InstagramClient`,
+  :class:`~downloader.pinterest.PinterestClient`,
+  :class:`~downloader.tiktok.TikTokClient` - the platform SDKs, each usable on
+  its own.
 * :mod:`downloader.core` - the shared models, HTTP layer, ffmpeg bridge,
   download engine and saver.
 

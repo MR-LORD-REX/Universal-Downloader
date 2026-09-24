@@ -22,7 +22,7 @@ from typing import Any, Optional, Sequence
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramForbiddenError
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import InlineKeyboardMarkup, Message
 
 from downloader.core.models import DownloadedFile, PostMetadata
 
@@ -37,6 +37,7 @@ from bot.services.routing import Action, RoutePlan, choose_quality, plan_route
 from bot.services.sender import Delivery, MediaSender
 from bot.services.status import StatusReporter
 from bot.ui.descriptions import build_caption, build_status
+from bot.ui.keyboards import post_markup
 from bot.utils.text import escape, format_size
 
 logger = logging.getLogger(__name__)
@@ -135,18 +136,20 @@ class AppContext:
         quality: Optional[str],
         size_bytes: Optional[int] = None,
         note: Optional[str] = None,
+        caption_enabled: bool = True,
     ) -> str:
+        if not caption_enabled:
+            return self.footer or ""
         return build_caption(
             meta, quality=quality, size_bytes=size_bytes, footer=self.footer, note=note
         )
 
-    def original_post_markup(self, meta: PostMetadata) -> Optional[InlineKeyboardMarkup]:
+    def original_post_markup(
+        self, meta: PostMetadata, *, caption_enabled: bool = True
+    ) -> InlineKeyboardMarkup:
+        """Buttons under a post: the original link and the caption toggle."""
         url = meta.requested_url or meta.url or meta.permalink or meta.external_url
-        if not url:
-            return None
-        return InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text="Original post", url=url)]]
-        )
+        return post_markup(url, caption_enabled=caption_enabled)
 
     async def reply(
         self,
@@ -236,9 +239,15 @@ class AppContext:
             return
 
         caption = self.caption_for(
-            meta, quality=quality, size_bytes=size_total or None, note=downgrade
+            meta,
+            quality=quality,
+            size_bytes=size_total or None,
+            note=downgrade,
+            caption_enabled=job.caption_enabled,
         )
-        original_markup = self.original_post_markup(meta)
+        original_markup = self.original_post_markup(
+            meta, caption_enabled=job.caption_enabled
+        )
         delivery = Delivery()
         if route.direct:
             try:
@@ -278,6 +287,7 @@ class AppContext:
                 chat_db_id=job.chat_db_id,
                 status_message_id=job.status_message_id,
                 reserved_ram=ram,
+                caption_enabled=job.caption_enabled,
             )
             accepted, queued_reason = self.queues.submit_process(queued)
             if accepted:
@@ -398,8 +408,15 @@ class AppContext:
 
         mux_items = [item for item in job.route.process if item.action == Action.MUX]
         server_items = [item for item in job.route.process if item.action != Action.MUX]
-        caption = self.caption_for(job.meta, quality=job.quality, size_bytes=job.route.process_bytes)
-        original_markup = self.original_post_markup(job.meta)
+        caption = self.caption_for(
+            job.meta,
+            quality=job.quality,
+            size_bytes=job.route.process_bytes,
+            caption_enabled=job.caption_enabled,
+        )
+        original_markup = self.original_post_markup(
+            job.meta, caption_enabled=job.caption_enabled
+        )
         delivery = Delivery()
         files: list[DownloadedFile] = []
         notes: list[str] = []

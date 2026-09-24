@@ -38,6 +38,9 @@ REDDIT_IMAGE = "https://i.redd.it/967qwrrqf7rh1.jpeg"
 REDDIT_VIDEO = "https://v.redd.it/lgup3p9me2rh1/CMAF_1080.mp4?source=fallback"
 IG_REEL = "https://www.instagram.com/reel/DdhvW0GslGe/"
 IG_CAROUSEL = "https://www.instagram.com/p/DdPEofvmpPd/"
+PIN_PIN = "https://www.pinterest.com/pin/1084663891475263837/"
+PIN_SHORT = "https://pin.it/3fJd2lQ"
+TT_VIDEO = "https://www.tiktok.com/@nasa/video/7253412088251534594"
 
 
 # --------------------------------------------------------------------- routing
@@ -54,6 +57,9 @@ def test_platform_routing_for_every_test_link() -> None:
         REDDIT_VIDEO: Platform.REDDIT,
         IG_REEL: Platform.INSTAGRAM,
         IG_CAROUSEL: Platform.INSTAGRAM,
+        PIN_PIN: Platform.PINTEREST,
+        PIN_SHORT: Platform.PINTEREST,
+        TT_VIDEO: Platform.TIKTOK,
     }
     for url, platform in expected.items():
         assert Downloader.platform_of(url) is platform, (url, Downloader.platform_of(url))
@@ -67,7 +73,6 @@ def test_unknown_hosts_are_not_claimed_by_reddit() -> None:
         "https://example.com/not-supported",
         "https://i.imgur.com/abc123.jpg",
         "https://vimeo.com/12345",
-        "https://tiktok.com/@a/video/1",
     ):
         assert Downloader.platform_of(url) is Platform.UNKNOWN, url
         assert Downloader.supports(url) is False, url

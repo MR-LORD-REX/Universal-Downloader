@@ -30,6 +30,12 @@ SUPPORTED_HOSTS = (
     "instagram.com",
     "instagr.am",
     "ig.me",
+    "pinterest.com",
+    "pin.it",
+    "tiktok.com",
+    "tiktokv.com",
+    "vm.tiktok.com",
+    "vt.tiktok.com",
 )
 
 

@@ -19,6 +19,8 @@ class Platform(StrEnum):
     YOUTUBE = "youtube"
     TWITTER = "twitter"
     INSTAGRAM = "instagram"
+    PINTEREST = "pinterest"
+    TIKTOK = "tiktok"
     UNKNOWN = "unknown"
 
 

@@ -141,6 +141,7 @@ class FetchJob:
     thread_id: Optional[int] = None
     quality: Optional[str] = None
     status_message_id: Optional[int] = None
+    caption_enabled: bool = True
     submitted_at: float = field(default_factory=time.monotonic)
 
 
@@ -161,6 +162,7 @@ class ProcessJob:
     thread_id: Optional[int] = None
     status_message_id: Optional[int] = None
     reserved_ram: int = 0
+    caption_enabled: bool = True
     submitted_at: float = field(default_factory=time.monotonic)
 
     @property

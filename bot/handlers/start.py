@@ -4,12 +4,18 @@ from __future__ import annotations
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
-from aiogram.types import ChatMemberUpdated, Message
+from aiogram.types import CallbackQuery, ChatMemberUpdated, Message
 
 from bot.app import AppContext
 from bot.db.models import User
 from bot.db.base import db
 from bot.db import repo
+from bot.ui.keyboards import (
+    CAPTION_TOGGLE_CALLBACK,
+    caption_of_markup,
+    post_markup,
+    settings_markup,
+)
 from bot.ui.style import header, row, rule, section, small_caps
 from bot.utils.text import escape, format_count, format_size
 
@@ -63,6 +69,7 @@ async def on_settings(message: Message, ctx: AppContext, user: User) -> None:
         row("Name", escape(user.display_name)),
         row("User ID", user.tg_id),
         row("DM access", "yes" if user.has_dm_access else "no"),
+        row("Captions", "on" if user.caption_enabled else "off"),
         row("Requests", format_count(user.request_count)),
         "",
         section("platform defaults"),
@@ -72,7 +79,37 @@ async def on_settings(message: Message, ctx: AppContext, user: User) -> None:
         limit = format_size(snapshot.max_media_size_bytes) if snapshot.max_media_size_bytes else "none"
         lines.append(f"{mark} {escape(snapshot.platform.title())} \u00b7 {escape(snapshot.quality)} \u00b7 {limit}")
     lines.append(rule())
-    await message.answer("\n".join(lines))
+    await message.answer(
+        "\n".join(lines),
+        reply_markup=settings_markup(user.caption_enabled),
+        disable_web_page_preview=True,
+    )
+
+
+@router.callback_query(F.data.startswith(CAPTION_TOGGLE_CALLBACK))
+async def on_toggle_caption(query: CallbackQuery, user: User) -> None:
+    """Flip the caption preference of whoever pressed the button."""
+    user.caption_enabled = not user.caption_enabled
+    on_post = str(query.data).endswith(":post")
+    message = query.message
+    markup = (
+        post_markup(
+            caption_of_markup(getattr(message, "reply_markup", None)),
+            caption_enabled=user.caption_enabled,
+        )
+        if on_post
+        else settings_markup(user.caption_enabled)
+    )
+    if message is not None:
+        try:
+            await message.edit_reply_markup(reply_markup=markup)
+        except Exception:  # noqa: BLE001 - the markup may be too old to edit
+            pass
+    await query.answer(
+        "Captions on \u00b7 new posts show the full description"
+        if user.caption_enabled
+        else "Captions off \u00b7 new posts show only the bot username"
+    )
 
 
 @router.my_chat_member()

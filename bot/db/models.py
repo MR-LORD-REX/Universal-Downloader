@@ -63,6 +63,9 @@ class User(TimestampMixin, Base):
     has_dm_access: Mapped[bool] = mapped_column(Boolean, default=False)
     """True once the user started the bot in private (so we may DM them)."""
 
+    caption_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    """When false, delivered media carries only the bot username as caption."""
+
     request_count: Mapped[int] = mapped_column(Integer, default=0)
     failed_count: Mapped[int] = mapped_column(Integer, default=0)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime)

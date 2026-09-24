@@ -153,9 +153,20 @@ resends the link.
 Captions follow the project's Telegram formatting rules (Unicode symbols as UI,
 no decorative emoji) and are per platform: YouTube shows channel/views/likes,
 Twitter shows likes/reposts/replies, Reddit shows subreddit/upvotes/comments,
-Instagram shows account / kind (Post, Reel or Carousel) / likes / comments / views.
+Instagram shows account / kind (Post, Reel or Carousel) / likes / comments / views,
+Pinterest shows author / kind (Pin, Idea Pin or Board) / saves, and TikTok shows
+account / kind (Video or Slideshow) / track / likes / shares / plays.
 They are HTML-escaped and clipped to Telegram's 1024 character caption limit.
 See `bot/ui/descriptions.py`.
+
+**The caption is optional, per user.** `/settings` carries a `Caption · on/off`
+button, and every delivered post repeats the same button in the row next to
+*Original post*, so users can flip it without leaving the message. When it is
+off, the delivered media carries **only the bot username** (`@bot`) instead of
+the description. The preference lives on `users.caption_enabled` (default on),
+is applied per requester, and is threaded through `FetchJob`/`ProcessJob` as
+`caption_enabled`. It affects **new** deliveries - an album caption that has
+already been sent is not rewritten.
 
 ### 1.8 Url fallback
 
@@ -195,7 +206,7 @@ and adds the admin set (`/admin /stats /broadcast /users /chats /platforms
 
 | table | holds |
 | --- | --- |
-| `users` | profile, `has_dm_access`, role, ban state, request counters |
+| `users` | profile, `has_dm_access`, `caption_enabled`, role, ban state, request counters |
 | `chats` | title/type/username, `can_delete_messages`, ban state, counters |
 | `memberships` | which user was seen in which chat |
 | `platform_settings` | the admin-editable per-platform tunables |
@@ -274,10 +285,10 @@ start-up; `python main.py --migrate` does it manually.
    first attempt and `my_chat_member` updates refresh it.
 6. **Platform rate limits are self-imposed.** The token buckets are ours, not
    the platforms'. Aggressive values can still get a CDN to throttle you.
-7. **Extraction depends on yt-dlp** for YouTube and Twitter ladders, and on
-   `instaloader` for Instagram; a platform change can break extraction until the
-   library is updated. Reddit metadata also relies on public endpoints (and
-   optionally OAuth credentials).
+7. **Extraction depends on yt-dlp** for YouTube, Twitter, Pinterest and TikTok,
+   and on `instaloader` for Instagram; a platform change can break extraction
+   until the library is updated. Reddit metadata also relies on public endpoints
+   (and optionally OAuth credentials).
 8. **Instagram needs a session to be reliable**, and its cdn urls are *signed
    and expiring* (roughly 24-48 h), so a url must be handed to Telegram promptly.
    Instagram stories also need a logged-in session and vanish after 24 hours.
@@ -289,7 +300,20 @@ start-up; `python main.py --migrate` does it manually.
 10. **No content filter.** NSFW/spoiler flags from the SDK are not acted on; add
    a policy in `bot/services/routing.py` if you need one.
 11. **Single-language UI.** Strings are English; no i18n layer.
-12. **Transient CDN stalls are not retried per item.** The HTTP layer retries a
+12. **TikTok blocks datacentre IPs.** From a cloud host every TikTok request
+    fails with `status 10204` or simply times out on connect (verified here:
+    `Connection to www.tiktok.com timed out`). The TikTok platform row can still
+    be enabled, but until the bot runs behind a residential/mobile proxy (`PROXY`)
+    or with a `COOKIES_FILE`, every TikTok link ends as an extraction error. The
+    SDK raises `RegionBlockedError` when TikTok says so and leaves a bare timeout
+    as a plain `MetadataError`.
+13. **TikTok photo (slideshow) posts yield audio only.** yt-dlp has no TikTok
+    image support, so the bot receives an `m4a` soundtrack for a slideshow and
+    sends that. Do not add TikTok to the *image* fast path expecting photos.
+14. **Pinterest reports duplicate resolutions.** Five genuinely different video
+    renditions all report `640x1138`, so `format_preference()` falls back to file
+    size as a tie-breaker. Never cache Pinterest formats on `(width, height)`.
+15. **Transient CDN stalls are not retried per item.** The HTTP layer retries a
     request and a stalled body read is capped by `REQUEST_TIMEOUT`
     (`sock_read`), but a CDN that stops sending mid-file (observed twice on
     `video.twimg.com` under back-to-back load, while the same download
